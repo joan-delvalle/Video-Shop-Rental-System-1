@@ -1,0 +1,108 @@
+@page "/rentals"
+@using Video_Shop_Rental_System.Models
+@inject IRentalService RentalService
+@inject ICustomerService CustomerService
+@inject IMovieService MovieService
+
+<h3>Rental Management</h3>
+
+<div class="mb-3">
+    <button class="btn btn-primary" @onclick="ShowRentalDialog">New Rental</button>
+</div>
+
+@if (showRentalDialog)
+{
+    <RentalDialog 
+        OnSave="HandleRentalSave"
+        OnCancel="HandleRentalCancel" />
+}
+
+<div class="row">
+    <div class="col-md-6">
+        <h4>Active Rentals</h4>
+        @foreach (var rental in activeRentals)
+        {
+            <div class="card mb-3">
+                <div class="card-header">
+                    <strong>@(rental.Customer?.FullName ?? "Unknown Customer")</strong>
+                    <span class="float-end">Due: @rental.DueDate.ToShortDateString()</span>
+                </div>
+                <div class="card-body">
+                    @foreach (var detail in rental.RentalDetails)
+                    {
+                        <div class="d-flex justify-content-between">
+                            <span>@(detail.Movie?.Title ?? "Unknown Movie")</span>
+                            <button class="btn btn-sm btn-success" 
+                                    @onclick="() => ReturnMovie(rental.Id, detail.MovieId)">
+                                Return
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+    
+    <div class="col-md-6">
+        <h4>Overdue Rentals</h4>
+        @foreach (var rental in overdueRentals)
+        {
+            <div class="card mb-3 border-danger">
+                <div class="card-header bg-danger text-white">
+                    <strong>@(rental.Customer?.FullName ?? "Unknown Customer")</strong>
+                    <span class="float-end">OVERDUE</span>
+                </div>
+                <div class="card-body">
+                    @foreach (var detail in rental.RentalDetails)
+                    {
+                        <div class="d-flex justify-content-between">
+                            <span>@(detail.Movie?.Title ?? "Unknown Movie")</span>
+                            <span class="text-danger">Late Fee: @detail.LateFee.ToString("C")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<RentalHeader> activeRentals = new List<RentalHeader>();
+    private List<RentalHeader> overdueRentals = new List<RentalHeader>();
+    private bool showRentalDialog = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRentals();
+    }
+
+    private async Task LoadRentals()
+    {
+        activeRentals = (await RentalService.GetActiveRentalsAsync()) ?? new List<RentalHeader>();
+        overdueRentals = (await RentalService.GetOverdueRentalsAsync()) ?? new List<RentalHeader>();
+    }
+
+    private void ShowRentalDialog()
+    {
+        showRentalDialog = true;
+    }
+
+    private async Task HandleRentalSave()
+    {
+        showRentalDialog = false;
+        await LoadRentals();
+    }
+
+    private void HandleRentalCancel()
+    {
+        showRentalDialog = false;
+    }
+
+    private async Task ReturnMovie(int rentalId, int movieId)
+    {
+        // pass just the ids to the service (server API expects a list of movie ids)
+        var ids = new List<int> { movieId };
+        await RentalService.ReturnMoviesAsync(rentalId, ids);
+        await LoadRentals();
+    }
+}
