@@ -1,0 +1,143 @@
+@page "/movies"
+@using Video_Shop_Rental_System.Models
+@inject IMovieService MovieService
+@inject IJSRuntime JS
+
+<h3>Movie Management</h3>
+
+<button class="btn btn-primary mb-3" @onclick="ShowAddMovie">Add New Movie</button>
+
+@if (isLoading)
+{
+    <div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>
+}
+else
+{
+    if (showAddEditDialog)
+    {
+        <MovieEditDialog 
+            Movie="selectedMovie" 
+            OnSave="HandleMovieSave" 
+            OnCancel="HandleMovieCancel" />
+    }
+
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Genre</th>
+                    <th>Release Year</th>
+                    <th>Rental Rate</th>
+                    <th>Available</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var movie in movies)
+                {
+                    <tr>
+                        <td>@movie.Title</td>
+                        <td>@movie.Genre</td>
+                        <td>@movie.ReleaseYear</td>
+                        <td>@movie.RentalRate.ToString("C")</td>
+                        <td>@($"{movie.AvailableQuantity} / {movie.StockQuantity}")</td>
+                        <td>
+                            <span class="badge @(movie.Status?.ToLower() == "available" ? "bg-success" : "bg-warning")">
+                                @movie.Status
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditMovie(movie)">
+                                Edit
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteMovie(movie)">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<Movie> movies = new();
+    private bool showAddEditDialog = false;
+    private bool isLoading = false;
+
+    // initialize with empty required props to satisfy `required` annotations
+    private Movie selectedMovie = new() { Title = string.Empty, Genre = string.Empty };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMovies();
+    }
+
+    private async Task LoadMovies()
+    {
+        isLoading = true;
+        try
+        {
+            movies = (await MovieService.GetAllMoviesAsync()) ?? new List<Movie>();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowAddMovie()
+    {
+        // new instance so editing doesn't mutate the list until saved
+        selectedMovie = new Movie { Title = string.Empty, Genre = string.Empty };
+        showAddEditDialog = true;
+    }
+
+    private void EditMovie(Movie movie)
+    {
+        // clone to avoid editing the list item directly
+        selectedMovie = new Movie
+        {
+            Id = movie.Id,
+            Title = movie.Title,
+            Description = movie.Description,
+            Genre = movie.Genre,
+            ReleaseYear = movie.ReleaseYear,
+            Director = movie.Director,
+            Cast = movie.Cast,
+            DurationMinutes = movie.DurationMinutes,
+            RentalRate = movie.RentalRate,
+            StockQuantity = movie.StockQuantity,
+            AvailableQuantity = movie.AvailableQuantity,
+            Status = movie.Status,
+            CreatedAt = movie.CreatedAt,
+            UpdatedAt = movie.UpdatedAt
+        };
+        showAddEditDialog = true;
+    }
+
+    private async Task HandleMovieSave(Movie movie)
+    {
+        // MovieEditDialog is expected to have saved via the service.
+        showAddEditDialog = false;
+        await LoadMovies();
+    }
+
+    private void HandleMovieCancel()
+    {
+        showAddEditDialog = false;
+    }
+
+    private async Task DeleteMovie(Movie movie)
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete {movie.Title}?");
+        if (!confirm) return;
+
+        await MovieService.DeleteMovieAsync(movie.Id);
+        await LoadMovies();
+    }
+}   
